@@ -43,6 +43,10 @@ namespace Прогнозирование.Броуновское_движение
         /// Квадратный корень из дисперсии
         /// </summary>
         public double sigma;
+        /// <summary>
+        /// Гистограмма распределения значений. [0] - сами значения с шагом 1. [1] - количесвто соответствующих значений.
+        /// </summary>
+        public double[][] gistogramma = new double[2][];
 
         /// <summary>
         /// Задаём готовый набор данных и сразу вычисляем все статистические свойства
@@ -68,12 +72,12 @@ namespace Прогнозирование.Броуновское_движение
         public void compute_Statistiki()
         {
             compute_normKorellFunction();  //Вычисляет sigma (Вычисляет D, M и n)
+            compute_gistogrammy();
         }
 
         public void compute_sigma()
         {
             compute_D();
-
             sigma = Math.Sqrt(D);
         }
 
@@ -118,7 +122,6 @@ namespace Прогнозирование.Броуновское_движение
 
         /// <summary>
         /// Вычислить корреляционную функцию и нормированную корреляционную функцию
-        /// https://studme.org/290395/matematika_himiya_fizik/normirovannaya_korrelyatsionnaya_funktsiya
         /// </summary>
         private void compute_normKorellFunction()
         {
@@ -142,8 +145,35 @@ namespace Прогнозирование.Броуновское_движение
 
                 korrellFunction[i] = summ / n;
                 //Нормировка
-                t2.compute_sigma();
-                normKorrellFunction[i] = korrellFunction[i] / (sigma * t2.sigma);
+                normKorrellFunction[i] = korrellFunction[i] / D;
+            }
+        }
+        
+        /// <summary>
+        /// Вычислить гисторамму распределения
+        /// </summary>
+        private void compute_gistogrammy()
+        {
+            int min = Convert.ToInt32(data.Min());
+            int max = Convert.ToInt32(data.Max()) + 1;
+
+            gistogramma[0] = new double[max - min];
+            gistogramma[1] = new double[max - min];
+
+            for (int k = min; k < max; k++)
+            {
+                double countValue = 0;
+
+                for (int i = 0; i < n; i++)
+                {
+                    if ((data[i] > k) && (data[i] < (k + 1)))
+                    {
+                        countValue++;
+                    }
+                }
+
+                gistogramma[0][k - min] = k;
+                gistogramma[1][k - min] = countValue;
             }
         }
 

@@ -28,6 +28,19 @@ namespace Прогнозирование.Броуновское_движение
         Random rnd = new Random();
         SettingsCSV settings = new SettingsCSV();
 
+        string status = "";
+        int progress = 0;
+
+        struct infaDlyaAlgoritma
+        {
+            public double[] data;
+
+            public int kolData;
+            public int kolShymov;
+            public int kolPprognozov;
+            public int kolLychihShymov;
+        }
+
         public void ZagryzkaInfiIzCSV(object a)
         {
             string fileName = (string)a;
@@ -75,8 +88,8 @@ namespace Прогнозирование.Броуновское_движение
                 dataGridView1.Invoke((Action)(() => { dataGridView1.Rows.Add(row); })); //Добавление строки в таблицу
                 chart1.Invoke((Action)(() => { chart1.Series[0].Points.AddY(dataList[i]); }));
 
-                label1.Invoke((Action)(() => { label1.Text = "Загружено данных:" + (i + 1) + "/" + countData; }));
-                progressBar1.Invoke((Action)(() => { progressBar1.Value = i; }));
+                status = "Загружено данных:" + (i + 1) + "/" + countData;
+                progress = i;
             }
 
             countData = dataList.Count;
@@ -126,42 +139,34 @@ namespace Прогнозирование.Броуновское_движение
             dataGridView3.Columns.Clear();
             chart2.Series.Clear();
 
-            
-            string dsa = ConfigurationManager.AppSettings.Get("Параметр1");
-            ConfigurationManager.AppSettings.Set("Параметр1", "текст");
-            
+            infaDlyaAlgoritma infa = new infaDlyaAlgoritma();
+            infa.data = data;
+            infa.kolData = Convert.ToInt32(dataGridView4.Rows[1].Cells[1].Value);
+            infa.kolShymov = Convert.ToInt32(dataGridView4.Rows[2].Cells[1].Value);
+            infa.kolPprognozov = Convert.ToInt32(dataGridView4.Rows[3].Cells[1].Value);
+            infa.kolLychihShymov = Convert.ToInt32(dataGridView4.Rows[4].Cells[1].Value);
 
-            int kolData = Convert.ToInt32(dataGridView4.Rows[1].Cells[1].Value);
-            int kolShymov = Convert.ToInt32(dataGridView4.Rows[2].Cells[1].Value);
-            int kolPprognozov = Convert.ToInt32(dataGridView4.Rows[3].Cells[1].Value);
-            int kolLychihShymov = Convert.ToInt32(dataGridView4.Rows[4].Cells[1].Value);
-
-            Algoritm(kolData, kolShymov, kolPprognozov, kolLychihShymov);
+            Task.Factory.StartNew(() => { Algoritm(infa); }); //Создание и запуск нового потока
         }
 
-        /// <summary>
-        /// Броуновское движение
-        /// </summary>
-        /// <param name="kolData">Количество данных на обработку</param>
-        /// <param name="kolShymov">Количество шумов</param>
-        /// <param name="kolPprognozov">Количество прогнозов</param>
-        /// <param name="kolLychihShymov">Количество лучших шумов</param>
-        public void Algoritm(int kolData, int kolShymov, int kolPprognozov, int kolLychihShymov)
+        public void Algoritm(object a)
         {
+            infaDlyaAlgoritma infa = (infaDlyaAlgoritma)a;
+
             Statistika dataS = new Statistika();
-            dataS.data = new double[kolData];
+            dataS.data = new double[infa.kolData];
 
             //Выделение из всех исходных данных необходимого участка
             Series seriesData = new Series("Исходные данные");
             //chart2.Series.Add("Исходные данные");
             seriesData.ChartType = SeriesChartType.Line;
             seriesData.Color = Color.Red;
-            seriesData.BorderWidth = 5;
+            seriesData.BorderWidth = 10;
 
-            for (int i = 0; i < kolData; i++)
+            for (int i = 0; i < infa.kolData; i++)
             {
-                dataS.data[i] = data[data.Length - kolData + i];
-                seriesData.Points.AddY(dataS.data[i]);
+                dataS.data[i] = infa.data[infa.data.Length - infa.kolData + i];
+                seriesData.Points.AddXY(i, dataS.data[i]);
             }
             
             poshagovo(dataS.data, "Исходные данные");
@@ -172,14 +177,13 @@ namespace Прогнозирование.Броуновское_движение
             poshagovo(dataS.korrellFunction, "Корреляционная функция исходных данных");
             poshagovo(dataS.normKorrellFunction, "Нормировання корреляционная функция исходных данных");
 
-
             //Вычисление приращения
             Statistika prirashenie = new Statistika();  //Приращение
-            prirashenie.data = new double[kolData - 1];
+            prirashenie.data = new double[infa.kolData - 1];
             //double[] prirashenie = new double[countData - 1];  //Приращение
             double prirashenie0 = dataS.data[0];  //Первый элемент приращения (y = x[0] - 0)
 
-            for (int i = 0; i < kolData - 1; i++)
+            for (int i = 0; i < infa.kolData - 1; i++)
             {
                 prirashenie.data[i] = dataS.data[i + 1] - dataS.data[i];
             }
@@ -193,14 +197,14 @@ namespace Прогнозирование.Броуновское_движение
             poshagovo(prirashenie.normKorrellFunction, "Нормированная корреляционная функция приращения");
 
             //ФГШ
-            int kolDataPlusPrognoz = kolData + kolPprognozov;
+            int kolDataPlusPrognoz = infa.kolData + infa.kolPprognozov;
             //double[][] modeliPrirasheniya = new double[kolShymov][];
-            Statistika[] modeliPrirasheniya = new Statistika[kolShymov];
+            Statistika[] modeliPrirasheniya = new Statistika[infa.kolShymov];
 
             Hurst hurst = new Hurst();
             double H;
 
-            if (checkBox1.Checked)
+            if (false)
             {
                 H = hurst.computeHurst(prirashenie.data);
             }
@@ -210,8 +214,10 @@ namespace Прогнозирование.Броуновское_движение
             }
 
             FGN _FGN = new FGN();
-            
-            for (int i = 0; i < kolShymov; i++)
+
+            progressBar1.Invoke((Action)(() => { progressBar1.Maximum = infa.kolShymov; }));
+
+            for (int i = 0; i < infa.kolShymov; i++)
             {
                 modeliPrirasheniya[i] = new Statistika();
                 //Шум
@@ -222,6 +228,9 @@ namespace Прогнозирование.Броуновское_движение
                 {
                     modeliPrirasheniya[i].data[k] = modeliPrirasheniya[i].data[k] * prirashenie.sigma + prirashenie.M;
                 }
+
+                status = "Сгенерировано ФГШ:" + (i + 1) + "/" + infa.kolShymov;
+                progress = i;
             }
 
             poshagovo(modeliPrirasheniya[0].data, "ФГШ 1я выборка");
@@ -229,9 +238,9 @@ namespace Прогнозирование.Броуновское_движение
             poshagovo(modeliPrirasheniya[2].data, "ФГШ 3я выборка");
 
             //Агрегирование
-            Statistika[] modeliIshodProcessa = new Statistika[kolShymov];
+            Statistika[] modeliIshodProcessa = new Statistika[infa.kolShymov];
 
-            for (int i = 0; i < kolShymov; i++)
+            for (int i = 0; i < infa.kolShymov; i++)
             {
                 modeliIshodProcessa[i] = new Statistika();
                 modeliIshodProcessa[i].data = new double[kolDataPlusPrognoz];
@@ -250,9 +259,9 @@ namespace Прогнозирование.Броуновское_движение
             poshagovo(modeliIshodProcessa[2].data, "Модель исходного процесса 3я выборка (после агрегирования)");
 
             //Сортировка массива по С-метрике по возрастанию
-            for (int i = 0; i < kolShymov - 1; i++)
+            for (int i = 0; i < infa.kolShymov - 1; i++)
             {
-                for (int k = i + 1; k < kolShymov; k++)
+                for (int k = i + 1; k < infa.kolShymov; k++)
                 {
                     if (modeliIshodProcessa[k].Ci_metrika < modeliIshodProcessa[i].Ci_metrika)
                     {
@@ -265,6 +274,9 @@ namespace Прогнозирование.Броуновское_движение
                         modeliPrirasheniya[k] = obmen;
                     }
                 }
+
+                status = "Отсортировано:" + (i + 2) + "/" + infa.kolShymov;
+                progress = i;
             }
 
             poshagovo(new double[10] {
@@ -281,75 +293,120 @@ namespace Прогнозирование.Броуновское_движение
                 "Первые 10 С-метрики после ранжирования");
 
             //Вывод на график точек смоделированного исходного процесса первых 10 моделей после ранжирования
-            for (int i = 0; i < kolLychihShymov; i++)
-            {
-                Series series = chart2.Series.Add("МИП #" + (i + 1));  //МИП - модель исходного процесса
-                series.ChartType = SeriesChartType.Point;
-                series.Color = Color.Blue;
-                series.MarkerStyle = MarkerStyle.Square;
+            Series series = new Series();
 
-                for (int k = 0; k < kolDataPlusPrognoz; k++)
+            for (int i = 0; i < infa.kolLychihShymov; i++)
+            {
+                chart2.Invoke((Action)(() =>
                 {
-                    series.Points.AddY(modeliIshodProcessa[i].data[k]);
+                    series = chart2.Series.Add("МИП #" + (i + 1));  //МИП - модель исходного процесса
+                    series.ChartType = SeriesChartType.Point;
+                    series.Color = Color.Blue;
+                }));
+                //series.MarkerStyle = MarkerStyle.Square;
+
+                for (int k = 0; k < infa.kolData; k++)
+                {
+                    chart2.Invoke((Action)(() =>
+                    {
+                        series.Points.AddXY(k, modeliIshodProcessa[i].data[k]);
+                    }));
                 }
 
-                poshagovo(modeliIshodProcessa[i].data, "Модель исходного процесса " + (i + 1) + "я выборка (после ранжирования)");
+                poshagovo(modeliIshodProcessa[i].data, "МИП " + (i + 1) + "я выборка (после ранжирования)");
                 modeliIshodProcessa[i].compute_Statistiki();
-                poshagovo(modeliIshodProcessa[i].normKorrellFunction, "Нормированная корреляционная функция модели исходного процесс " + (i + 1) + "я выборка (после ранжирования)");
+                poshagovo(modeliIshodProcessa[i].gistogramma[0], "X гисторгаммы МИП");
+                poshagovo(modeliIshodProcessa[i].gistogramma[1], "Y гисторгаммы МИП");
+                poshagovo(modeliIshodProcessa[i].normKorrellFunction, "Нормированная корреляционная функция МИП " + (i + 1) + "я выборка (после ранжирования)");
                 poshagovo(modeliPrirasheniya[i].data, "Модель приращения " + (i + 1) + "я выборка (после ранжирования)");
                 modeliPrirasheniya[i].compute_Statistiki();
+                poshagovo(modeliPrirasheniya[i].gistogramma[0], "X гисторгаммы модели приращения");
+                poshagovo(modeliPrirasheniya[i].gistogramma[1], "Y гисторгаммы модели приращения");
                 poshagovo(modeliPrirasheniya[i].normKorrellFunction, "Нормированная корреляционная функция модели приращения " + (i + 1) + "я выборка (после ранжирования)");
             }
 
-            chart2.Series.Add(seriesData);
+            for (int i = 0; i < infa.kolLychihShymov; i++)
+            {
+                chart2.Invoke((Action)(() =>
+                {
+                    series = chart2.Series.Add("Прогноз #" + (i + 1));
+                    series.ChartType = SeriesChartType.Point;
+                    series.Color = Color.Green;
+                    //series.MarkerStyle = chart2.Series[i].MarkerStyle;
+                }));
+
+                for (int k = infa.kolData; k < kolDataPlusPrognoz; k++)
+                {
+                    chart2.Invoke((Action)(() =>
+                    {
+                        series.Points.AddXY(k, modeliIshodProcessa[i].data[k]);
+                    }));
+                }
+            }
+
+            chart2.Invoke((Action)(() =>
+            {
+                chart2.Series.Add(seriesData);
+                chart2.ChartAreas[0].AxisX.Minimum = 0;
+                chart2.ChartAreas[0].AxisX.Maximum = kolDataPlusPrognoz;
+                chart2.ChartAreas[0].AxisX.Interval = infa.kolPprognozov;
+            }));
 
             //Вычисление мин, макс, сред для прогнозов
-            double[][] result = new double[kolPprognozov][];
+            double[][] result = new double[infa.kolPprognozov][];
 
-            for (int i = 0; i < kolPprognozov; i++)
+            for (int i = 0; i < infa.kolPprognozov; i++)
             {
-                double min = modeliIshodProcessa[0].data[kolData + i];
-                double max = modeliIshodProcessa[0].data[kolData + i];
-                double summ = modeliIshodProcessa[0].data[kolData + i];
+                double min = modeliIshodProcessa[0].data[infa.kolData + i];
+                double max = modeliIshodProcessa[0].data[infa.kolData + i];
+                double summ = modeliIshodProcessa[0].data[infa.kolData + i];
 
-                for (int k = 1; k < kolLychihShymov; k++)
+                for (int k = 1; k < infa.kolLychihShymov; k++)
                 {
-                    if (modeliIshodProcessa[k].data[kolData + i] < min)
+                    if (modeliIshodProcessa[k].data[infa.kolData + i] < min)
                     {
-                        min = modeliIshodProcessa[k].data[kolData + i];
+                        min = modeliIshodProcessa[k].data[infa.kolData + i];
                     }
 
-                    if (modeliIshodProcessa[k].data[kolData + i] > max)
+                    if (modeliIshodProcessa[k].data[infa.kolData + i] > max)
                     {
-                        max = modeliIshodProcessa[k].data[kolData + i];
+                        max = modeliIshodProcessa[k].data[infa.kolData + i];
                     }
 
-                    summ += modeliIshodProcessa[k].data[kolData + i];
+                    summ += modeliIshodProcessa[k].data[infa.kolData + i];
                 }
 
                 result[i] = new double[3];
-                result[i][0] = summ / kolLychihShymov;
+                result[i][0] = summ / infa.kolLychihShymov;
                 result[i][1] = min;
                 result[i][2] = max;
             }
 
             //Вывод рельтатов
-            DateTime dateTime = DateTime.Parse(dataGridView1.Rows[dataGridView1.Rows.Count - 1].Cells[0].Value.ToString());
-            DateTime dateTimeEnd_minus1 = DateTime.Parse(dataGridView1.Rows[dataGridView1.Rows.Count - 2].Cells[0].Value.ToString());
+            DateTime dateTime = new DateTime();
+            DateTime dateTimeEnd_minus1 = new DateTime();
+            dataGridView1.Invoke((Action)(() =>
+            {
+                dateTime = DateTime.Parse(dataGridView1.Rows[dataGridView1.Rows.Count - 1].Cells[0].Value.ToString());
+                dateTimeEnd_minus1 = DateTime.Parse(dataGridView1.Rows[dataGridView1.Rows.Count - 2].Cells[0].Value.ToString());
+            }));
             TimeSpan timeSpan = dateTime - dateTimeEnd_minus1;
 
             string dateTimeFormat = settings.getString("Вид принимаемого формата даты");
 
-            for (int i = 0; i < kolPprognozov; i++)
+            for (int i = 0; i < infa.kolPprognozov; i++)
             {
-                dataGridView2.Columns.Add("columns_2_" + i, "");
+                dataGridView1.Invoke((Action)(() =>
+                {
+                    dataGridView2.Columns.Add("columns_2_" + i, "");
 
-                dateTime += timeSpan;
+                    dateTime += timeSpan;
 
-                dataGridView2.Rows[0].Cells[i + 1].Value = dateTime.ToString("dd.MM.yyyy");
-                dataGridView2.Rows[1].Cells[i + 1].Value = result[i][0].ToString("F" + 3);
-                dataGridView2.Rows[2].Cells[i + 1].Value = result[i][1].ToString("F" + 3);
-                dataGridView2.Rows[3].Cells[i + 1].Value = result[i][2].ToString("F" + 3);
+                    dataGridView2.Rows[0].Cells[i + 1].Value = dateTime.ToString("dd.MM.yyyy");
+                    dataGridView2.Rows[1].Cells[i + 1].Value = result[i][0].ToString("F" + 6);
+                    dataGridView2.Rows[2].Cells[i + 1].Value = result[i][1].ToString("F" + 6);
+                    dataGridView2.Rows[3].Cells[i + 1].Value = result[i][2].ToString("F" + 6);
+                }));
             }
         }
 
@@ -360,20 +417,23 @@ namespace Прогнозирование.Броуновское_движение
                 return;
             }
 
-            dataGridView3.Columns.Add("columns3_" + dataGridView3.Columns.Count, opisanieShaga);
-
-            if (row.Length + 1 > dataGridView3.Rows.Count)
+            dataGridView3.Invoke((Action)(() =>
             {
-                dataGridView3.Rows.Add(row.Length + 1 - dataGridView3.Rows.Count);
-            }
+                dataGridView3.Columns.Add("columns3_" + dataGridView3.Columns.Count, opisanieShaga);
 
-            dataGridView3.Rows[0].Cells[dataGridView3.Columns.Count - 1].Value = opisanieShaga;
+                if (row.Length + 1 > dataGridView3.Rows.Count)
+                {
+                    dataGridView3.Rows.Add(row.Length + 1 - dataGridView3.Rows.Count);
+                }
+
+                dataGridView3.Rows[0].Cells[dataGridView3.Columns.Count - 1].Value = opisanieShaga;
 
 
-            for (int i = 0; i < row.Length; i++)
-            {
-                dataGridView3.Rows[i + 1].Cells[dataGridView3.Columns.Count - 1].Value = row[i];
-            }
+                for (int i = 0; i < row.Length; i++)
+                {
+                    dataGridView3.Rows[i + 1].Cells[dataGridView3.Columns.Count - 1].Value = row[i];
+                }
+            }));
         }
 
         private void button8_Click(object sender, EventArgs e)
@@ -425,6 +485,8 @@ namespace Прогнозирование.Броуновское_движение
                 dataGridView4.Rows[3].Cells[1].Value = settings.getString("Кол. прогнозов");
                 dataGridView4.Rows[4].Cells[1].Value = settings.getString("Кол. лучших прогнозов");
                 dataGridView4.Rows[5].Cells[1].Value = settings.getString("Параметр Херста");
+
+                timer1.Start();
             }
             catch (Exception ex)
             {
@@ -444,6 +506,93 @@ namespace Прогнозирование.Броуновское_движение
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
             saveSettings();
+        }
+
+        private void timer1_Tick(object sender, EventArgs e)
+        {
+            label1.Invoke((Action)(() => { label1.Text = status; }));
+            progressBar1.Invoke((Action)(() => { progressBar1.Value = progress; }));
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            dataGridView5.Rows.Add(new string[] { "Значение", "1й прогноз", "2й прогноз", "3й прогноз" });
+
+            infaDlyaAlgoritma infa = new infaDlyaAlgoritma();
+            infa.data = data;
+            infa.kolData = 50;
+            infa.kolShymov = Convert.ToInt32(dataGridView4.Rows[2].Cells[1].Value);
+            infa.kolPprognozov = 3;
+            infa.kolLychihShymov = Convert.ToInt32(dataGridView4.Rows[4].Cells[1].Value);
+
+            Task.Factory.StartNew(() => { kachestvo_prognoza(infa); }); //Создание и запуск нового потока
+        }
+
+        private void kachestvo_prognoza(object a)
+        {
+            infaDlyaAlgoritma infa = (infaDlyaAlgoritma)a;
+
+            double[] oldData = infa.data;
+
+            for (int i = 0; i < 147; i++)
+            {
+                dataGridView2.Invoke((Action)(() =>
+                {
+                    dataGridView2.Columns.Clear();
+                    dataGridView2.Columns.Add("columns_3_headers", "");
+                    dataGridView2.Rows.Add(4);
+                    dataGridView2.Rows[0].Cells[0].Value = "Время";
+                    dataGridView2.Rows[1].Cells[0].Value = "Сред";
+                    dataGridView2.Rows[2].Cells[0].Value = "Мин";
+                    dataGridView2.Rows[3].Cells[0].Value = "Макс";
+                }));
+
+                dataGridView3.Invoke((Action)(() =>
+                {
+                    dataGridView3.Rows.Clear();
+                    dataGridView3.Columns.Clear();
+                }));
+                chart2.Invoke((Action)(() =>
+                {
+                    chart2.Series.Clear();
+                }));
+
+                infa.data = new double[infa.kolData];
+
+                for (int k = 0; k < infa.kolData; k++)
+                {
+                    infa.data[k] = oldData[data.Length - 200 + i + k];
+                }
+
+                Algoritm(infa);
+
+                string[] row = new string[4];
+                row[0] = data[data.Length - 200 + i + infa.kolData].ToString();
+                row[1] = dataGridView2.Rows[1].Cells[1].Value.ToString();
+                row[2] = dataGridView2.Rows[1].Cells[2].Value.ToString();
+                row[3] = dataGridView2.Rows[1].Cells[3].Value.ToString();
+
+                dataGridView5.Invoke((Action)(() =>
+                {
+                    dataGridView5.Rows.Add(row);
+                }));
+            }
+
+            string[] row2 = new string[4];
+            row2[0] = data[data.Length - 200 + 147 + infa.kolData + 1].ToString();
+
+            dataGridView5.Invoke((Action)(() =>
+            {
+                dataGridView5.Rows.Add(row2);
+            }));
+
+            row2[0] = data[data.Length - 200 + 147 + infa.kolData + 2].ToString();
+
+            dataGridView5.Invoke((Action)(() =>
+            {
+                dataGridView5.Rows.Add(row2);
+            }));
+
         }
     }
 }
